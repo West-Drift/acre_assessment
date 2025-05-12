@@ -18,7 +18,7 @@ with tab1:
     st.components.v1.html(html_map, height=600, scrolling=True)
 
 with tab2:
-    st.header("NDVI Time Series and Chart Outputs")
+    st.header("NDVI Time Series Chart Outputs")
 
     def plot_ndvi_interactive(csv_filename, title):
         csv_path = os.path.join("assets", csv_filename)
@@ -43,27 +43,31 @@ with tab2:
             (df['Date'] <= pd.to_datetime(date_range[1]))
         ]
 
-        fig, ax = plt.subplots(figsize=(10, 4))
-        for uai in filtered_df['UAI'].unique():
-            subset = filtered_df[filtered_df['UAI'] == uai]
-            ax.plot(subset['Date'], subset['NDVI'], marker='o', label=uai, linewidth=1.5)
+        col1, _ = st.columns([3, 2])  # 60% width plot
+        with col1:
+            fig, ax = plt.subplots(figsize=(10, 4))
+            for uai in filtered_df['UAI'].unique():
+                subset = filtered_df[filtered_df['UAI'] == uai]
+                ax.plot(subset['Date'], subset['NDVI'], marker='o', label=uai, linewidth=1.5)
 
-        ax.set_title(title, fontsize=10)
-        ax.set_xlabel("Date", fontsize=9)
-        ax.set_ylabel("NDVI", fontsize=9)
-        ax.tick_params(axis='both', labelsize=8)
-        ax.legend(fontsize=7, ncol=2, loc='upper right')
-        ax.grid(True)
-        plt.tight_layout()
-        st.pyplot(fig)
+            ax.set_title(title, fontsize=10)
+            ax.set_xlabel("Date", fontsize=9)
+            ax.set_ylabel("NDVI", fontsize=9)
+            ax.tick_params(axis='both', labelsize=8)
+            ax.legend(fontsize=7, ncol=2, loc='upper right')
+            ax.grid(True)
+            plt.tight_layout()
+            st.pyplot(fig)
 
-    # Interactive plots
+    # Standard NDVI charts
     plot_ndvi_interactive("Bangweulu_MODIS_NDVI_TimeSeries_UAIs.csv", "UAI NDVI - MODIS")
     plot_ndvi_interactive("Bangweulu_VIIRS_NDVI_TimeSeries_UAIs.csv", "UAI NDVI - VIIRS")
     plot_ndvi_interactive("Bangweulu_MODIS_NDVI_TimeSeries_MCDA_UAIs.csv", "MCDA NDVI - MODIS")
     plot_ndvi_interactive("Bangweulu_VIIRS_NDVI_TimeSeries_MCDA_UAIs.csv", "MCDA NDVI - VIIRS")
 
-    # Comparison plot: UAI vs MCDA for same zones
+    # Comparison using Plotly
+    import plotly.graph_objs as go
+
     st.subheader("Comparison: NDVI-only vs MCDA UAIs (MODIS NDVI)")
 
     # Load data
@@ -73,31 +77,54 @@ with tab2:
     modis_uai_df['Date'] = pd.to_datetime(modis_uai_df['Date'], dayfirst=False)
     modis_mcda_df['Date'] = pd.to_datetime(modis_mcda_df['Date'], dayfirst=False)
 
-    fig, ax = plt.subplots(figsize=(10, 4))  # Chart size: 2/3 width, 1/3 height
+    # Extract all valid UAI numbers
+    uai_ids = sorted(modis_uai_df['UAI'].str.extract(r'(\d+)')[0].dropna().astype(int).unique())
 
+    fig = go.Figure()
     colors = ['green', 'blue', 'orange', 'purple', 'brown']
-    zone_ids = [f"UAI {i}" for i in range(1, 6)]  # UAI 1 to UAI 5
 
-    for i, uai in enumerate(zone_ids):
+    for i, uai_num in enumerate(uai_ids):
         color = colors[i % len(colors)]
+        uai_label = f"UAI {uai_num}"
+        mcda_label = f"MCDA UAI {uai_num}"
 
-        # Plot NDVI-only UAI
-        uai_data = modis_uai_df[modis_uai_df['UAI'] == uai]
-        ax.plot(uai_data['Date'], uai_data['NDVI'], linestyle='-', color=color, label=f"{uai} (NDVI-only)", linewidth=1.5)
+        # NDVI-only line
+        df_ndvi = modis_uai_df[modis_uai_df['UAI'] == uai_label]
+        if not df_ndvi.empty:
+            fig.add_trace(go.Scatter(
+                x=df_ndvi['Date'],
+                y=df_ndvi['NDVI'],
+                mode='lines+markers',
+                name=f"{uai_label} (NDVI-only)",
+                line=dict(color=color, dash='dot'),
+                hoverinfo='x+y+name'
+            ))
 
-        # Plot MCDA UAI
-        mcda_data = modis_mcda_df[modis_mcda_df['UAI'] == uai]
-        if not mcda_data.empty:
-            ax.plot(mcda_data['Date'], mcda_data['NDVI'], linestyle='--', color=color, label=f"{uai} (MCDA)", linewidth=1.5)
+        # MCDA line
+        df_mcda = modis_mcda_df[modis_mcda_df['UAI'] == mcda_label]
+        if not df_mcda.empty:
+            fig.add_trace(go.Scatter(
+                x=df_mcda['Date'],
+                y=df_mcda['NDVI'],
+                mode='lines+markers',
+                name=f"{uai_label} (MCDA)",
+                line=dict(color=color),
+                hoverinfo='x+y+name'
+            ))
 
-    ax.set_title("NDVI-only vs MCDA UAIs (MODIS NDVI, 2020–2024)", fontsize=10)
-    ax.set_xlabel("Date", fontsize=9)
-    ax.set_ylabel("Mean NDVI", fontsize=9)
-    ax.tick_params(axis='both', labelsize=8)
-    ax.grid(True)
-    ax.legend(fontsize=7, ncol=2, loc='upper right')
-    plt.tight_layout()
-    st.pyplot(fig)
+    fig.update_layout(
+        title="NDVI-only vs MCDA UAIs (MODIS NDVI, 2020–2024)",
+        xaxis_title="Date",
+        yaxis_title="Mean NDVI",
+        template="plotly_white",
+        height=400,
+        margin=dict(t=40, l=20, r=20, b=40),
+        legend=dict(font=dict(size=10))
+    )
+
+    col1, _ = st.columns([3, 2])  # 60% layout
+    with col1:
+        st.plotly_chart(fig, use_container_width=True)
 
     st.caption("[Comparison] NDVI-only vs MCDA time series exported: Bangweulu_NDVI_Comparison_NDVI_vs_MCDA.csv")
 
