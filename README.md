@@ -57,4 +57,4 @@ The project is deployed using **Streamlit** and can be accessed at:
 ![NDVI Chart](assets/charts.png)
 
 **Documentation**  
-![Documentation Preview](/documentation.png)
+![Documentation Preview](assets/documentation.png)
