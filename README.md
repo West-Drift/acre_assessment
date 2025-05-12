@@ -6,7 +6,7 @@ This file outlines the geospatial workflow developed to generate edible vegetati
 Objective: To derive an edible vegetation mask and segment the landscape into Unit Areas of Insurance (UAIs) using NDVI and supporting datasets. This supports forage indexing in Game Management Areas (GMAs) from 2020 to 2024.
 
 The following sections outlines the methodology applied to my automation pipeline. These have been expounded on using raw cells in the Notebook file attached .ipynb and non- 
-#	1.1 Load Area of Interest (AOI): Game Management Areas (GMAs)
+**	1.1 Load Area of Interest (AOI): Game Management Areas (GMAs)
 #	1.2 Load MODIS NDVI Data (2020–2024)
 #	1.3 Load Sentinel-2 Mosaic and ESA WorldCover 2020/2021 for Land Cover Data
 #	1.4 Calculate NDVI Amplitude and Mean (2020–2024)
