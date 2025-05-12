@@ -43,15 +43,18 @@ with tab2:
             (df['Date'] <= pd.to_datetime(date_range[1]))
         ]
 
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(10, 4))
         for uai in filtered_df['UAI'].unique():
             subset = filtered_df[filtered_df['UAI'] == uai]
-            ax.plot(subset['Date'], subset['NDVI'], marker='o', label=uai)
-        ax.set_title(title)
-        ax.set_xlabel("Date")
-        ax.set_ylabel("NDVI")
-        ax.legend()
+            ax.plot(subset['Date'], subset['NDVI'], marker='o', label=uai, linewidth=1.5)
+
+        ax.set_title(title, fontsize=10)
+        ax.set_xlabel("Date", fontsize=9)
+        ax.set_ylabel("NDVI", fontsize=9)
+        ax.tick_params(axis='both', labelsize=8)
+        ax.legend(fontsize=7, ncol=2, loc='upper right')
         ax.grid(True)
+        plt.tight_layout()
         st.pyplot(fig)
 
     # Interactive plots
@@ -60,25 +63,45 @@ with tab2:
     plot_ndvi_interactive("Bangweulu_MODIS_NDVI_TimeSeries_MCDA_UAIs.csv", "MCDA NDVI - MODIS")
     plot_ndvi_interactive("Bangweulu_VIIRS_NDVI_TimeSeries_MCDA_UAIs.csv", "MCDA NDVI - VIIRS")
 
-    st.subheader("Comparison: UAI vs MCDA (MODIS)")
+    # Comparison plot: UAI vs MCDA for same zones
+    st.subheader("Comparison: NDVI-only vs MCDA UAIs (MODIS NDVI)")
+
+    # Load data
     modis_uai_df = pd.read_csv(os.path.join("assets", "Bangweulu_MODIS_NDVI_TimeSeries_UAIs.csv"))
     modis_mcda_df = pd.read_csv(os.path.join("assets", "Bangweulu_MODIS_NDVI_TimeSeries_MCDA_UAIs.csv"))
 
     modis_uai_df['Date'] = pd.to_datetime(modis_uai_df['Date'], dayfirst=False)
     modis_mcda_df['Date'] = pd.to_datetime(modis_mcda_df['Date'], dayfirst=False)
 
-    uai_avg = modis_uai_df.groupby('Date')['NDVI'].mean()
-    mcda_avg = modis_mcda_df.groupby('Date')['NDVI'].mean()
+    fig, ax = plt.subplots(figsize=(10, 4))  # Chart size: 2/3 width, 1/3 height
 
-    fig, ax = plt.subplots()
-    ax.plot(uai_avg.index, uai_avg.values, 'o--', label='UAI - MODIS', color='green')
-    ax.plot(mcda_avg.index, mcda_avg.values, 's--', label='MCDA - MODIS', color='blue')
-    ax.set_title("MODIS NDVI: UAI vs MCDA (Mean NDVI)")
-    ax.set_xlabel("Date")
-    ax.set_ylabel("NDVI")
-    ax.legend()
+    colors = ['green', 'blue', 'orange', 'purple', 'brown']
+    zone_ids = [f"UAI {i}" for i in range(1, 6)]  # UAI 1 to UAI 5
+
+    for i, uai in enumerate(zone_ids):
+        color = colors[i % len(colors)]
+
+        # Plot NDVI-only UAI
+        uai_data = modis_uai_df[modis_uai_df['UAI'] == uai]
+        ax.plot(uai_data['Date'], uai_data['NDVI'], linestyle='-', color=color, label=f"{uai} (NDVI-only)", linewidth=1.5)
+
+        # Plot MCDA UAI
+        mcda_data = modis_mcda_df[modis_mcda_df['UAI'] == uai]
+        if not mcda_data.empty:
+            ax.plot(mcda_data['Date'], mcda_data['NDVI'], linestyle='--', color=color, label=f"{uai} (MCDA)", linewidth=1.5)
+
+    ax.set_title("NDVI-only vs MCDA UAIs (MODIS NDVI, 2020–2024)", fontsize=10)
+    ax.set_xlabel("Date", fontsize=9)
+    ax.set_ylabel("Mean NDVI", fontsize=9)
+    ax.tick_params(axis='both', labelsize=8)
     ax.grid(True)
+    ax.legend(fontsize=7, ncol=2, loc='upper right')
+    plt.tight_layout()
     st.pyplot(fig)
+
+    st.caption("[Comparison] NDVI-only vs MCDA time series exported: Bangweulu_NDVI_Comparison_NDVI_vs_MCDA.csv")
+
+
 
 with tab3:
     st.header("Workflow Documentation")
