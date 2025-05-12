@@ -1,0 +1,123 @@
+import streamlit as st
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+from datetime import datetime
+
+# Set page configuration
+st.set_page_config(page_title="Bangweulu GMA Dashboard", layout="wide")
+
+# Tabs for navigation
+tab1, tab2, tab3 = st.tabs(["Interactive Map", "NDVI Charts", "Documentation"])
+
+with tab1:
+    st.header("Forage Analysis Map")
+    map_path = os.path.join("assets", "Bangweulu_Interactive_Map.html")
+    with open(map_path, 'r', encoding='utf-8') as f:
+        html_map = f.read()
+    st.components.v1.html(html_map, height=600, scrolling=True)
+
+with tab2:
+    st.header("NDVI Time Series and Chart Outputs")
+
+    def plot_ndvi_interactive(csv_filename, title):
+        csv_path = os.path.join("assets", csv_filename)
+        df = pd.read_csv(csv_path)
+
+        if 'Date' in df.columns:
+            df['Date'] = pd.to_datetime(df['Date'], dayfirst=False)
+
+        start_date = df['Date'].min().to_pydatetime()
+        end_date = df['Date'].max().to_pydatetime()
+
+        date_range = st.slider(
+            f"Date Range for {title}",
+            min_value=start_date,
+            max_value=end_date,
+            value=(start_date, end_date),
+            format="YYYY-MM"
+        )
+
+        filtered_df = df[
+            (df['Date'] >= pd.to_datetime(date_range[0])) & 
+            (df['Date'] <= pd.to_datetime(date_range[1]))
+        ]
+
+        fig, ax = plt.subplots()
+        for uai in filtered_df['UAI'].unique():
+            subset = filtered_df[filtered_df['UAI'] == uai]
+            ax.plot(subset['Date'], subset['NDVI'], marker='o', label=uai)
+        ax.set_title(title)
+        ax.set_xlabel("Date")
+        ax.set_ylabel("NDVI")
+        ax.legend()
+        ax.grid(True)
+        st.pyplot(fig)
+
+    # Interactive plots
+    plot_ndvi_interactive("Bangweulu_MODIS_NDVI_TimeSeries_UAIs.csv", "UAI NDVI - MODIS")
+    plot_ndvi_interactive("Bangweulu_VIIRS_NDVI_TimeSeries_UAIs.csv", "UAI NDVI - VIIRS")
+    plot_ndvi_interactive("Bangweulu_MODIS_NDVI_TimeSeries_MCDA_UAIs.csv", "MCDA NDVI - MODIS")
+    plot_ndvi_interactive("Bangweulu_VIIRS_NDVI_TimeSeries_MCDA_UAIs.csv", "MCDA NDVI - VIIRS")
+
+    st.subheader("Comparison: UAI vs MCDA (MODIS)")
+    modis_uai_df = pd.read_csv(os.path.join("assets", "Bangweulu_MODIS_NDVI_TimeSeries_UAIs.csv"))
+    modis_mcda_df = pd.read_csv(os.path.join("assets", "Bangweulu_MODIS_NDVI_TimeSeries_MCDA_UAIs.csv"))
+
+    modis_uai_df['Date'] = pd.to_datetime(modis_uai_df['Date'], dayfirst=False)
+    modis_mcda_df['Date'] = pd.to_datetime(modis_mcda_df['Date'], dayfirst=False)
+
+    uai_avg = modis_uai_df.groupby('Date')['NDVI'].mean()
+    mcda_avg = modis_mcda_df.groupby('Date')['NDVI'].mean()
+
+    fig, ax = plt.subplots()
+    ax.plot(uai_avg.index, uai_avg.values, 'o--', label='UAI - MODIS', color='green')
+    ax.plot(mcda_avg.index, mcda_avg.values, 's--', label='MCDA - MODIS', color='blue')
+    ax.set_title("MODIS NDVI: UAI vs MCDA (Mean NDVI)")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("NDVI")
+    ax.legend()
+    ax.grid(True)
+    st.pyplot(fig)
+
+with tab3:
+    st.header("Workflow Documentation")
+    st.markdown("""
+    ### Workflow Overview
+    This document outlines the geospatial workflow developed to generate edible vegetation masks and segment Unit Areas of Insurance (UAIs) using satellite-derived vegetation indices.  
+    The methodology integrates MODIS NDVI, ESA WorldCover, and additional datasets to support forage monitoring across GMAs.
+
+    **Objective:**  
+    To derive an edible vegetation mask and segment the landscape into Unit Areas of Insurance (UAIs) using NDVI and supporting datasets.  
+    This supports forage indexing in Game Management Areas (GMAs) from 2020 to 2024.
+
+    **Methodology Steps:**  
+    - 1.1 Load Area of Interest (AOI): Game Management Areas (GMAs)  
+    - 1.2 Load MODIS NDVI Data (2020–2024)  
+    - 1.3 Load Sentinel-2 Mosaic and ESA WorldCover 2020/2021  
+    - 1.4 Calculate NDVI Amplitude and Mean (2020–2024)  
+    - 1.5 Create Land Cover Masks  
+    - 1.6 Create Edible and Non-Edible Vegetation Layers  
+    - 1.7.0 Cluster Edible Vegetation Areas using SNIC Segmentation  
+    - 1.7.1 Segment into UAIs  
+    - 1.8 Extract Monthly NDVI Time Series for UAIs (2020–2024)  
+    - 1.8.1 VIIRS NDVI Time Series  
+    - 2.0 Multi-Index UAI Segmentation (MCDA)  
+    - 2.1 Load Additional Datasets: LAI, Precip, Soil Moisture  
+    - 2.2 Apply Multi-Criteria Decision Analysis (MCDA)  
+    - 2.3 Monthly NDVI Time Series for MCDA UAIs  
+    - 2.3.1 VIIRS vs MODIS over MCDA UAIs  
+    - 2.4 MODIS NDVI Comparison: NDVI-only vs MCDA UAIs  
+    - 3.0 Export Maps and Prepare Dashboard  
+    - 3.1 Export Masks as GeoTIFFs and Shapefiles  
+    - 3.2 Build Streamlit Dashboard for Outputs
+
+    ### Rationale
+    The rationale behind the workflow is to establish a reproducible, automated method for isolating edible vegetation zones 
+    that vary seasonally, allowing risk-based segmentation and comparison between NDVI-only and multi-criteria approaches for defining UAIs. One of the major differences highlighted between the two methods is that MDCA resulted in more compact clusters compared to NDVI only units Segmentation.
+
+    ### Challenges
+    - Incomplete datasets caused missing or inconclusive outputs  
+    - Recommend harmonizing datasets with consistent bands (e.g., MODIS vs VIIRS)  
+    - Complex shapefiles with high polygon counts slowed processing
+    """)
