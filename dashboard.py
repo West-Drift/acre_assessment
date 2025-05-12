@@ -18,7 +18,7 @@ with tab1:
     st.components.v1.html(html_map, height=600, scrolling=True)
 
 with tab2:
-    st.header("NDVI Time Series Chart Outputs")
+    st.header("NDVI Time Series Charts")
 
     def plot_ndvi_interactive(csv_filename, title):
         csv_path = os.path.join("assets", csv_filename)
