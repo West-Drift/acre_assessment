@@ -5,25 +5,24 @@ import matplotlib.pyplot as plt
 import plotly.graph_objs as go
 from datetime import datetime
 
-# Set page configuration
+# Page setup
 st.set_page_config(page_title="Bangweulu GMA Dashboard", layout="wide")
 
-# Tabs for navigation
+# Tabs
 tab1, tab2, tab3 = st.tabs(["Interactive Map", "NDVI Charts", "Documentation"])
 
-# -------- TAB 1: Interactive Map --------
+# ---- TAB 1: Interactive Map ----
 with tab1:
     st.header("Forage Analysis Map")
-    map_path = os.path.join("assets", "Bangweulu_Interactive_Map.html")
-    
     try:
+        map_path = os.path.join("assets", "Bangweulu_Interactive_Map.html")
         with open(map_path, 'r', encoding='utf-8') as f:
             html_map = f.read()
         st.components.v1.html(html_map, height=600, scrolling=True)
     except Exception as e:
-        st.error(f"Map could not be loaded. Reason: {e}")
+        st.error(f"Map could not be loaded: {e}")
 
-# -------- TAB 2: NDVI Charts --------
+# ---- TAB 2: NDVI Charts ----
 with tab2:
     st.header("NDVI Time Series Charts")
 
@@ -31,16 +30,17 @@ with tab2:
         csv_path = os.path.join("assets", csv_filename)
 
         if not os.path.exists(csv_path):
-            st.warning(f"⚠️ {title} data file not found: {csv_filename}")
+            st.warning(f"{title} data not found: {csv_filename}")
             return
 
         df = pd.read_csv(csv_path)
-        if 'Date' not in df.columns or 'NDVI' not in df.columns or 'UAI' not in df.columns:
-            st.warning(f"⚠️ {title} has missing columns.")
+        if not {'Date', 'NDVI', 'UAI'}.issubset(df.columns):
+            st.warning(f"{title} is missing required columns.")
             return
 
         df['Date'] = pd.to_datetime(df['Date'], dayfirst=False)
-        start_date, end_date = df['Date'].min(), df['Date'].max()
+        start_date = df['Date'].min().date()
+        end_date = df['Date'].max().date()
 
         date_range = st.slider(
             f"Date Range for {title}",
@@ -50,7 +50,10 @@ with tab2:
             format="YYYY-MM"
         )
 
-        filtered_df = df[(df['Date'] >= date_range[0]) & (df['Date'] <= date_range[1])]
+        filtered_df = df[
+            (df['Date'].dt.date >= date_range[0]) &
+            (df['Date'].dt.date <= date_range[1])
+        ]
 
         col1, _ = st.columns([3, 2])
         with col1:
@@ -68,23 +71,22 @@ with tab2:
             plt.tight_layout()
             st.pyplot(fig)
 
-    # Standard NDVI charts
+    # Load all charts
     plot_ndvi_interactive("Bangweulu_MODIS_NDVI_TimeSeries_UAIs.csv", "UAI NDVI - MODIS")
     plot_ndvi_interactive("Bangweulu_VIIRS_NDVI_TimeSeries_UAIs.csv", "UAI NDVI - VIIRS")
     plot_ndvi_interactive("Bangweulu_MODIS_NDVI_TimeSeries_MCDA_UAIs.csv", "MCDA NDVI - MODIS")
     plot_ndvi_interactive("Bangweulu_VIIRS_NDVI_TimeSeries_MCDA_UAIs.csv", "MCDA NDVI - VIIRS")
 
-    # Comparison chart
+    # ---- Comparison Plot ----
     st.subheader("Comparison: NDVI-only vs MCDA UAIs (MODIS NDVI)")
-
     try:
-        modis_uai_df = pd.read_csv(os.path.join("assets", "Bangweulu_MODIS_NDVI_TimeSeries_UAIs.csv"))
-        modis_mcda_df = pd.read_csv(os.path.join("assets", "Bangweulu_MODIS_NDVI_TimeSeries_MCDA_UAIs.csv"))
+        uai_df = pd.read_csv(os.path.join("assets", "Bangweulu_MODIS_NDVI_TimeSeries_UAIs.csv"))
+        mcda_df = pd.read_csv(os.path.join("assets", "Bangweulu_MODIS_NDVI_TimeSeries_MCDA_UAIs.csv"))
 
-        modis_uai_df['Date'] = pd.to_datetime(modis_uai_df['Date'], dayfirst=False)
-        modis_mcda_df['Date'] = pd.to_datetime(modis_mcda_df['Date'], dayfirst=False)
+        uai_df['Date'] = pd.to_datetime(uai_df['Date'], dayfirst=False)
+        mcda_df['Date'] = pd.to_datetime(mcda_df['Date'], dayfirst=False)
 
-        uai_ids = sorted(modis_uai_df['UAI'].str.extract(r'(\d+)')[0].dropna().astype(int).unique())
+        uai_ids = sorted(uai_df['UAI'].astype(str).str.extract(r'(\d+)')[0].dropna().astype(int).unique())
 
         fig = go.Figure()
         colors = ['green', 'blue', 'orange', 'purple', 'brown']
@@ -94,27 +96,23 @@ with tab2:
             uai_label = f"UAI {uai_num}"
             mcda_label = f"MCDA UAI {uai_num}"
 
-            df_ndvi = modis_uai_df[modis_uai_df['UAI'] == uai_label]
-            df_mcda = modis_mcda_df[modis_mcda_df['UAI'] == mcda_label]
+            df_ndvi = uai_df[uai_df['UAI'] == uai_label]
+            df_mcda = mcda_df[mcda_df['UAI'] == mcda_label]
 
             if not df_ndvi.empty:
                 fig.add_trace(go.Scatter(
-                    x=df_ndvi['Date'],
-                    y=df_ndvi['NDVI'],
+                    x=df_ndvi['Date'], y=df_ndvi['NDVI'],
                     mode='lines+markers',
                     name=f"{uai_label} (NDVI-only)",
-                    line=dict(color=color, dash='dot'),
-                    hoverinfo='x+y+name'
+                    line=dict(color=color, dash='dot')
                 ))
 
             if not df_mcda.empty:
                 fig.add_trace(go.Scatter(
-                    x=df_mcda['Date'],
-                    y=df_mcda['NDVI'],
+                    x=df_mcda['Date'], y=df_mcda['NDVI'],
                     mode='lines+markers',
                     name=f"{uai_label} (MCDA)",
-                    line=dict(color=color),
-                    hoverinfo='x+y+name'
+                    line=dict(color=color)
                 ))
 
         fig.update_layout(
@@ -133,9 +131,9 @@ with tab2:
 
         st.caption("[Comparison] NDVI-only vs MCDA time series exported: Bangweulu_NDVI_Comparison_NDVI_vs_MCDA.csv")
     except Exception as e:
-        st.warning(f"Comparison plot failed to render. Reason: {e}")
+        st.warning(f"Could not render comparison chart. Reason: {e}")
 
-# -------- TAB 3: Documentation --------
+# ---- TAB 3: Documentation ----
 with tab3:
     st.header("Workflow Documentation")
     st.markdown("""
@@ -146,29 +144,15 @@ with tab3:
     To derive an edible vegetation mask and segment the landscape into Unit Areas of Insurance (UAIs) using NDVI and supporting datasets.
 
     **Methodology Steps:**  
-    - 1.1 Load Area of Interest (AOI): Game Management Areas (GMAs)  
-    - 1.2 Load MODIS NDVI Data (2020–2024)  
-    - 1.3 Load Sentinel-2 Mosaic and ESA WorldCover 2020/2021  
-    - 1.4 Calculate NDVI Amplitude and Mean (2020–2024)  
-    - 1.5 Create Land Cover Masks  
-    - 1.6 Create Edible and Non-Edible Vegetation Layers  
-    - 1.7.0 Cluster Edible Vegetation Areas using SNIC Segmentation  
-    - 1.7.1 Segment into UAIs  
-    - 1.8 Extract Monthly NDVI Time Series for UAIs (2020–2024)  
-    - 1.8.1 VIIRS NDVI Time Series  
-    - 2.0 Multi-Index UAI Segmentation (MCDA)  
-    - 2.1 Load Additional Datasets: LAI, Precip, Soil Moisture  
-    - 2.2 Apply Multi-Criteria Decision Analysis (MCDA)  
-    - 2.3 Monthly NDVI Time Series for MCDA UAIs  
-    - 2.3.1 VIIRS vs MODIS over MCDA UAIs  
-    - 2.4 MODIS NDVI Comparison: NDVI-only vs MCDA UAIs  
-    - 3.0 Export Maps and Prepare Dashboard  
-    - 3.1 Export Masks as GeoTIFFs and Shapefiles  
-    - 3.2 Build Streamlit Dashboard for Outputs
+    - Load AOI: GMAs  
+    - Load MODIS NDVI Data (2020–2024)  
+    - Load Sentinel-2 & ESA WorldCover  
+    - Extract Monthly NDVI Time Series  
+    - Apply Multi-Criteria Decision Analysis (MCDA)  
+    - Build Streamlit Dashboard  
 
     ### Rationale
-    The rationale behind the workflow is to establish a reproducible, automated method for isolating edible vegetation zones 
-    that vary seasonally, allowing risk-based segmentation and comparison between NDVI-only and multi-criteria approaches for defining UAIs. One of the major differences highlighted between the two methods is that MDCA resulted in more compact clusters compared to NDVI only units Segmentation.
+    Establish a reproducible, automated method for isolating edible vegetation zones and compare NDVI-only vs MCDA clustering approaches.
 
     ### Challenges
     - Incomplete datasets caused missing or inconclusive outputs  
